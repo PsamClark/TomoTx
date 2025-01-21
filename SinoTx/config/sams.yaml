@@ -1,0 +1,15 @@
+train:
+  mbsz: 16
+  maxep: 20
+  lr: 0.001
+  ckp_steps: 1
+
+model:
+  enc_emb_dim: 256
+  dec_emb_dim: 256
+  enc_nlayer: 8
+  enc_nhead: 16
+  dec_nlayer: 2
+  dec_nhead: 16
+  angle_range:240
+  angle_step:2 

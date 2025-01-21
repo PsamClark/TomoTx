@@ -3,7 +3,7 @@ import numpy as np
 from transformer import Block
 
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
-from utils import init_weights, pos_embd_gen, random_masking
+from utils import init_weights, pos_embd_gen, missing_wedge_mask, random_masking
 
 class SinoTxEnc(torch.nn.Module):
     def __init__(self, seqlen, in_dim, params):
@@ -13,7 +13,8 @@ class SinoTxEnc(torch.nn.Module):
 
         mdl_cfg = params['model']
         self.enc_emb_dim = mdl_cfg['enc_emb_dim']
-        self.mask_ratio  = mdl_cfg['mask_ratio']
+        self.angle_range = mdl_cfg['angle_range']
+        self.angle_step = mdl_cfg['angle_step']
 
         self.cls_token   = torch.nn.Parameter(torch.zeros(1, 1, self.enc_emb_dim), requires_grad=True)
         self.enc_pos_emb = torch.nn.Parameter(torch.zeros(1, self.seqlen+1, self.enc_emb_dim), requires_grad=False)
@@ -39,31 +40,31 @@ class SinoTxEnc(torch.nn.Module):
 
         # initialize nn.Linear and nn.LayerNorm
         self.apply(init_weights)
-
-    def forward(self, x, mask_ratio=None):
+ 
+    def forward(self, x, i = None, mask_ratio=0.4):
         # overwrite init at run time
         if mask_ratio is not None:
             self.mask_ratio = mask_ratio 
         _emb = self.enc_proj(x).flatten(2).transpose(1, 2)
-
         # add pos embed w/o cls token
         _tmp = _emb + self.enc_pos_emb[:, 1:, :]
 
         # masking: length -> length * mask_ratio
-        _tmp, mask, ids_restore = random_masking(_tmp, self.mask_ratio)
-        # _tmp, mask, ids_restore = uniform_masking(_tmp, self.mask_ratio)
-        # _tmp, mask, ids_restore = missing_wedge_mask(_tmp, self.mask_ratio)
+        #_tmp, mask, ids_restore = random_masking(_tmp, self.mask_ratio)
+        #_tmp, mask, ids_restore = uniform_masking(_tmp, self.mask_ratio)
+        _tmp, mask, ids_restore = missing_wedge_mask(_tmp, self.angle_range, self.angle_step)
 
         # append cls token
         cls_token  = self.cls_token + self.enc_pos_emb[:, :1, :]
         cls_tokens = cls_token.expand(_tmp.shape[0], -1, -1)
-        _tmp = torch.cat((cls_tokens, _tmp), dim=1)
+
+        _tmp1 = torch.cat((cls_tokens, _tmp), dim=1)
 
         for blk in self.enc_blocks:
-            _tmp = blk(_tmp)
-        _tmp = self.enc_norm(_tmp)
+            _tmp1 = blk(_tmp1)
+        _tmp1 = self.enc_norm(_tmp1)
         
-        return _tmp, mask, ids_restore
+        return _tmp1, _tmp, mask, ids_restore
 
 class SinoTxDec(torch.nn.Module):
     def __init__(self, seqlen, out_dim, params):
@@ -146,7 +147,7 @@ class SinoTx(torch.nn.Module):
         if mask_ratio is not None:
             self.encoder.mask_ratio = mask_ratio
 
-        latent, mask, ids_restore = self.encoder.forward(imgs)
+        latent, masked, mask, ids_restore = self.encoder.forward(imgs)
         pred = self.decoder.forward(latent, ids_restore)  # [N, L, D]
 
         loss = self.forward_loss(imgs[:,0], pred, mask)

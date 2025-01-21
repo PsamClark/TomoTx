@@ -3,8 +3,8 @@ import h5py, logging
 from torch.utils.data import Dataset
 
 class SinogramDataset(Dataset):
-    def __init__(self, ifn, params, world_size=None, rank=None):
-        ds_cfg = params['dataset']
+    def __init__(self, ifn, world_size=None, rank=None):
+        ds_cfg = {'dkey':'sino','norm':True}
 
         h5fd = h5py.File(ifn, 'r')
         n_samples = h5fd[ds_cfg['dkey']].shape[0]
@@ -17,6 +17,7 @@ class SinogramDataset(Dataset):
             ei = (rank + 1) * npr
         logging.info(f"rank {rank} loading data from index {si} to {ei}")
         self.targets  = h5fd[ds_cfg['dkey']][si:ei]
+        print(self.targets[0].shape)
         h5fd.close()
 
         # norm or not will influence pos-encodding

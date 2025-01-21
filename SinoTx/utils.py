@@ -29,7 +29,7 @@ def random_masking(x, mask_ratio):
     len_keep = int(L * (1 - mask_ratio))
     
     noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
-    
+    print('im here')
     # sort noise for each sample
     ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
     ids_restore = torch.argsort(ids_shuffle, dim=1)
@@ -63,11 +63,12 @@ def uniform_masking(x, mask_ratio):
 def missing_wedge_mask(x, angle_range,angle_step):
     N, L, D = x.shape  # batch, length, dim
     mw = L-angle_range
+    correct_range = angle_range//angle_step
     
     mseqs = torch.randint(low=0, high=L-mw, size=(N, ), device=x.device)
     
     ids_keep = torch.cat([torch.cat([torch.arange(0, mseqs[n], step=angle_step, device=x.device), \
-                                    torch.arange(mseqs[n]+mw, L,step=angle_step device=x.device)])[None] for n in range(N)], axis=0)
+                                    torch.arange(mseqs[n]+mw, L,step=angle_step, device=x.device)])[None,:correct_range] for n in range(N)], axis=0)
     masked_ids = torch.cat([torch.arange(0, L, device=x.device)[None] for n in range(N)], axis=0)
     
     mask_ = torch.ones_like(masked_ids, device=x.device).scatter(1,ids_keep,0)
